@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
+import android.widget.AdapterView.VISIBLE
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
@@ -26,6 +27,7 @@ import retrofit2.Response
 class ChooseGroupFragment : Fragment() {
 
     private lateinit var chooseGroupViewModel: ChooseGroupViewModel
+    private lateinit var root: View
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -34,7 +36,7 @@ class ChooseGroupFragment : Fragment() {
     ): View? {
         chooseGroupViewModel =
             ViewModelProviders.of(this).get(ChooseGroupViewModel::class.java)
-        val root = inflater.inflate(R.layout.fragment_gallery, container, false)
+        root = inflater.inflate(R.layout.fragment_gallery, container, false)
         val textView: TextView = root.findViewById(R.id.text_gallery)
         chooseGroupViewModel.text.observe(viewLifecycleOwner, Observer {
             textView.text = getString(R.string.action_course_not_loaded_yet)
@@ -58,7 +60,17 @@ class ChooseGroupFragment : Fragment() {
                 position: Int,
                 id: Long
             ) {
-                DownloadFileAsync().execute()
+                var asyncTask = DownloadFileAsync()
+                asyncTask.execute()
+                var groupSpinner = root.findViewById<Spinner>(R.id.group_spinner)
+                groupSpinner.visibility = View.VISIBLE
+                val gradapter = ArrayAdapter(
+                    requireContext(),
+                    android.R.layout.simple_spinner_item,
+                    asyncTask.get()
+                )
+                gradapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                groupSpinner.adapter = gradapter
             }
         }
     }
