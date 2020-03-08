@@ -18,11 +18,18 @@ fun getElements(document: Document?): Elements? {
     )?.select("a")
 }
 
-fun getStringArrayOfValues(str: String?): Array<String> {
+fun getMapOfValues(str: String?): Map<String, String> {
     var elements = getElements(convertToDoc(str))
-    var array: MutableList<String> = ArrayList()
-    elements?.forEach {element ->
-        array.add(element.text())
+    var map: MutableMap<String, String> = HashMap()
+    elements?.forEach { element ->
+        map.put(element.text(), validateUrlString(element.attr("href")))
     }
-    return array.toTypedArray()
+    return map
+}
+
+private fun validateUrlString(str: String): String {
+    if (!str.contains("bsac.by")) {
+        return "http://bsac.by/".plus(str)
+    }
+    return str
 }

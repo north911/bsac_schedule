@@ -3,31 +3,28 @@ package com.example.bsac_schedule.ui.chooseGroup
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.View.INVISIBLE
+import android.view.View.VISIBLE
 import android.view.ViewGroup
-import android.widget.AdapterView
-import android.widget.AdapterView.OnItemSelectedListener
-import android.widget.AdapterView.VISIBLE
-import android.widget.ArrayAdapter
-import android.widget.Spinner
-import android.widget.TextView
+import android.widget.*
+import androidx.core.view.get
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import com.example.bsac_schedule.R
-import com.example.bsac_schedule.asyncTask.DownloadFileAsync
-import com.example.bsac_schedule.fileDownloader.FileDownloader
-import com.example.bsac_schedule.htmlUtils.getStringArrayOfValues
-import com.example.bsac_schedule.httpServices.DownloadPageService
-import com.example.bsac_schedule.httpServices.buildUri
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
+import com.example.bsac_schedule.apiUtils.ApiClient
+import com.example.bsac_schedule.apiUtils.impl.ApiClientImpl
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 
 class ChooseGroupFragment : Fragment() {
 
     private lateinit var chooseGroupViewModel: ChooseGroupViewModel
     private lateinit var root: View
+    private val apiClient: ApiClient = ApiClientImpl()
+    private var linksValueMap: Map<String, String> = HashMap()
+    val viewModelScope = CoroutineScope(Dispatchers.Main)
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -38,20 +35,32 @@ class ChooseGroupFragment : Fragment() {
             ViewModelProviders.of(this).get(ChooseGroupViewModel::class.java)
         root = inflater.inflate(R.layout.fragment_gallery, container, false)
         val textView: TextView = root.findViewById(R.id.text_gallery)
-        chooseGroupViewModel.text.observe(viewLifecycleOwner, Observer {
-            textView.text = getString(R.string.action_course_not_loaded_yet)
-        })
-        makeRequestForHtmlDownloadPage(textView, root.findViewById(R.id.course_spinner))
+        val progressBar = root.findViewById<ProgressBar>(R.id.indeterminateBar)
+        makeAsycnScheduleRequest(progressBar, textView)
+        progressBar.visibility = VISIBLE
         return root
     }
 
-    private fun setSpinnerValues(spinner: Spinner, arr: Array<String>) {
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, arr)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-        spinner.onItemSelectedListener = object : OnItemSelectedListener {
+    private fun makeAsycnScheduleRequest(
+        progressBar: ProgressBar,
+        textView: TextView
+    ) {
+        val spinner = root.findViewById<Spinner>(R.id.course_spinner)
+        viewModelScope.launch {
+            linksValueMap = apiClient.makeRequestForHtmlDownloadPage()
+            setSpinnerValues(spinner)
+            progressBar.visibility = INVISIBLE
+            textView.text = resources.getString(R.string.choose_schedule)
+            setSpinnerListener(spinner)
+        }
+    }
+
+    private fun setSpinnerListener(spinner: Spinner) {
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: AdapterView<*>?) {
-                FileDownloader().downloadFile()
+                viewModelScope.launch {
+                    println("test123")
+                }
             }
 
             override fun onItemSelected(
@@ -60,33 +69,20 @@ class ChooseGroupFragment : Fragment() {
                 position: Int,
                 id: Long
             ) {
-                var asyncTask = DownloadFileAsync()
-                asyncTask.execute()
-                var groupSpinner = root.findViewById<Spinner>(R.id.group_spinner)
-                groupSpinner.visibility = View.VISIBLE
-                val gradapter = ArrayAdapter(
-                    requireContext(),
-                    android.R.layout.simple_spinner_item,
-                    asyncTask.get()
-                )
-                gradapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                groupSpinner.adapter = gradapter
+                viewModelScope.launch {
+                    apiClient.donloadAndParseGroups(linksValueMap.get(spinner.selectedItem.toString()))
+                }
             }
         }
     }
 
-    private fun makeRequestForHtmlDownloadPage(textView: TextView, spinner: Spinner) {
-        val requestAddress: DownloadPageService = buildUri()
-        val pageCall: Call<String> = requestAddress.get()
-        pageCall.enqueue(object : Callback<String> {
-            override fun onFailure(call: Call<String>, t: Throwable) {
-                println("ALARM ERROR")
-            }
-
-            override fun onResponse(call: Call<String>, response: Response<String>) {
-                textView.text = getString(R.string.choose_schedule)
-                setSpinnerValues(spinner, getStringArrayOfValues(response.body()))
-            }
-        })
+    private fun setSpinnerValues(spinner: Spinner) {
+        val adapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            linksValueMap.keys.toTypedArray()
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinner.adapter = adapter
     }
 }
